@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>ANHKHOA Tools</title>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Plus Jakarta Sans',sans-serif;background:#08080c;color:#eaeaf2;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}
+.bg{position:fixed;inset:0;z-index:0;overflow:hidden}
+.bg::before{content:'';position:absolute;width:600px;height:600px;background:radial-gradient(circle,rgba(0,180,255,.15),transparent 70%);top:-250px;left:-250px;border-radius:50%;filter:blur(80px)}
+.bg::after{content:'';position:absolute;width:600px;height:600px;background:radial-gradient(circle,rgba(140,80,255,.15),transparent 70%);bottom:-250px;right:-250px;border-radius:50%;filter:blur(80px)}
+.box{position:relative;z-index:1;max-width:400px;width:100%;background:rgba(20,20,28,.9);backdrop-filter:blur(24px);border:1px solid rgba(255,255,255,.06);border-radius:24px;padding:36px 28px;box-shadow:0 24px 60px rgba(0,0,0,.5);animation:in .4s ease}
+@keyframes in{from{opacity:0;transform:translateY(15px)}to{opacity:1;transform:translateY(0)}}
+.logo{text-align:center;margin-bottom:28px}
+.mark{width:64px;height:64px;margin:0 auto 14px;border-radius:18px;background:linear-gradient(135deg,#00b4ff,#8c50ff);display:flex;align-items:center;justify-content:center;font-size:1.8rem;box-shadow:0 10px 30px rgba(0,180,255,.25)}
+h1{font-size:1.6rem;font-weight:800;background:linear-gradient(135deg,#00b4ff,#8c50ff);-webkit-background-clip:text;-webkit-text-fill-color:transparent;margin-bottom:4px}
+.sub{color:#6b6b85;font-size:.82rem}
+.tabs{display:flex;background:rgba(0,0,0,.3);padding:4px;border-radius:12px;margin-bottom:22px}
+.tab{flex:1;padding:10px;text-align:center;border-radius:9px;font-weight:600;font-size:.85rem;color:#6b6b85;cursor:pointer;transition:all .2s}
+.tab.active{background:linear-gradient(135deg,#00b4ff,#8c50ff);color:#fff}
+.field{margin-bottom:14px}
+.field label{display:block;font-size:.72rem;color:#6b6b85;margin-bottom:6px;font-weight:600;text-transform:uppercase}
+.field input{width:100%;padding:13px 15px;background:rgba(0,0,0,.35);border:1px solid rgba(255,255,255,.07);border-radius:12px;color:#eaeaf2;font-family:inherit;font-size:16px;outline:none;transition:all .2s}
+.field input:focus{border-color:#00b4ff;box-shadow:0 0 0 3px rgba(0,180,255,.1)}
+.btn{width:100%;padding:14px;border:none;border-radius:12px;font-family:inherit;font-size:.95rem;font-weight:700;cursor:pointer;background:linear-gradient(135deg,#00b4ff,#8c50ff);color:#fff;box-shadow:0 8px 20px rgba(0,180,255,.2);transition:all .2s;margin-top:6px}
+.btn:hover:not(:disabled){transform:translateY(-1px);box-shadow:0 12px 28px rgba(0,180,255,.35)}
+.btn:disabled{opacity:.6;cursor:not-allowed}
+.msg{padding:11px 14px;border-radius:10px;font-size:.82rem;margin-top:12px;display:none}
+.msg.ok{background:rgba(34,197,94,.1);color:#4ade80;border:1px solid rgba(34,197,94,.25);display:block}
+.msg.err{background:rgba(239,68,68,.1);color:#f87171;border:1px solid rgba(239,68,68,.25);display:block}
+</style>
+</head>
+<body>
+<div class="bg"></div>
+<div class="box">
+<div class="logo">
+<div class="mark">&#128295;</div>
+<h1>ANHKHOA TOOLS</h1>
+<p class="sub">Get Key + AI + Encode + Dump Filter</p>
+</div>
+<div class="tabs">
+<div class="tab active" id="tabLogin" onclick="switchTab('login')">Dang nhap</div>
+<div class="tab" id="tabReg" onclick="switchTab('register')">Dang ky</div>
+</div>
+<div class="field">
+<label>Ten dang nhap</label>
+<input type="text" id="username" placeholder="Nhap ten...">
+</div>
+<div class="field">
+<label>Mat khau</label>
+<input type="password" id="password" placeholder="Nhap mat khau...">
+</div>
+<button class="btn" id="btnSubmit" onclick="submitForm()">Dang nhap</button>
+<div class="msg" id="msg"></div>
+</div>
+<script>
+var mode = "login";
+function switchTab(m){
+    mode = m;
+    document.getElementById("tabLogin").classList.toggle("active", m === "login");
+    document.getElementById("tabReg").classList.toggle("active", m === "register");
+    document.getElementById("btnSubmit").textContent = m === "login" ? "Dang nhap" : "Dang ky";
+    document.getElementById("msg").className = "msg";
+}
+async function submitForm(){
+    var u = document.getElementById("username").value.trim();
+    var p = document.getElementById("password").value;
+    var msg = document.getElementById("msg");
+    var btn = document.getElementById("btnSubmit");
+    if(!u || !p){ msg.className = "msg err"; msg.textContent = "Nhap day du thong tin!"; return; }
+    btn.disabled = true; btn.textContent = "Dang xu ly...";
+    try{
+        var res = await fetch("/login", {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},
+            credentials: "same-origin",
+            body: JSON.stringify({username: u, password: p, action: mode})
+        });
+        var data = await res.json();
+        if(data.ok){
+            msg.className = "msg ok"; msg.textContent = data.message;
+            setTimeout(function(){ window.location.href = "/"; }, 500);
+        } else {
+            msg.className = "msg err"; msg.textContent = data.error;
+            btn.disabled = false; btn.textContent = mode === "login" ? "Dang nhap" : "Dang ky";
+        }
+    } catch(e){
+        msg.className = "msg err"; msg.textContent = "Loi: " + e.message;
+        btn.disabled = false; btn.textContent = mode === "login" ? "Dang nhap" : "Dang ky";
+    }
+}
+</script>
+</body>
+</html>

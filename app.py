@@ -4,10 +4,9 @@ import sqlite3
 import hashlib
 import base64
 import secrets
-import re
+import requests
 from datetime import datetime, timedelta
 from functools import wraps
-import requests
 
 app = Flask(__name__)
 app.secret_key = "anhkhoa-tools-secret-2026"
@@ -16,8 +15,16 @@ app.permanent_session_lifetime = timedelta(days=7)
 DB_PATH = "tools.db"
 
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "")
+GITHUB_TOKEN = os.environ.get("GITHUB_TOKEN", "")
 GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
-MODEL_FALLBACKS = ["llama-3.3-70b-versatile", "llama-3.1-8b-instant"]
+
+MODEL_FALLBACKS = [
+    "llama-3.3-70b-versatile",
+    "llama-3.1-8b-instant",
+    "llama3-70b-8192",
+    "llama3-8b-8192",
+    "mixtral-8x7b-32768",
+]
 
 MODE_CONFIG = {
     "basic": {"system": "Ban la tro ly AI than thien. Tra loi ngan gon.", "max_tokens": 1000},
@@ -30,7 +37,6 @@ def init_db():
     conn = sqlite3.connect(DB_PATH)
     conn.execute("CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT UNIQUE NOT NULL, password_hash TEXT NOT NULL, created_at TEXT NOT NULL)")
     conn.execute("CREATE TABLE IF NOT EXISTS chats (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, role TEXT NOT NULL, content TEXT NOT NULL, created_at TEXT NOT NULL)")
-    conn.execute("CREATE TABLE IF NOT EXISTS scripts (id INTEGER PRIMARY KEY AUTOINCREMENT, script_id TEXT UNIQUE NOT NULL, code_encrypted TEXT NOT NULL, created_at TEXT NOT NULL)")
     conn.commit()
     conn.close()
 
@@ -48,113 +54,147 @@ def login_required(f):
     return deco
 
 
-# ============ AI CHAT ============
+# ============ AI CHAT — FIXED ============
 def call_groq(messages, system, max_tokens, temperature):
-    last_error = "Khong the ket noi AI."
     if not GROQ_API_KEY:
-        return False, "Chua cau hinh GROQ_API_KEY."
+        return False, "Chua cau hinh GROQ_API_KEY tren Render."
+    if not GROQ_API_KEY.startswith("gsk_"):
+        return False, "GROQ_API_KEY sai dinh dang (phai bat dau bang gsk_)."
+
+    last_error = "Khong the ket noi AI."
     for model in MODEL_FALLBACKS:
         try:
             payload = {
                 "model": model,
                 "messages": [{"role": "system", "content": system}] + messages,
-                "max_tokens": max_tokens,
+                "max_tokens": min(max_tokens, 8000),
                 "temperature": temperature,
             }
-            headers = {"Authorization": "Bearer " + GROQ_API_KEY, "Content-Type": "application/json"}
+            headers = {
+                "Authorization": "Bearer " + GROQ_API_KEY,
+                "Content-Type": "application/json",
+            }
             r = requests.post(GROQ_URL, json=payload, headers=headers, timeout=60)
-            data = r.json()
-            if r.status_code == 200 and "choices" in data:
-                return True, data["choices"][0]["message"]["content"]
-            last_error = data.get("error", {}).get("message", "Loi API")
+
+            if r.status_code == 200:
+                data = r.json()
+                if "choices" in data and len(data["choices"]) > 0:
+                    return True, data["choices"][0]["message"]["content"]
+
+            try:
+                err_data = r.json()
+                err_msg = err_data.get("error", {}).get("message", "")
+            except:
+                err_msg = r.text[:200]
+
+            last_error = "HTTP " + str(r.status_code) + ": " + err_msg
+
+            if r.status_code == 401:
+                return False, "GROQ_API_KEY sai hoac het han. Tao key moi."
+            if r.status_code == 429:
+                continue
+            if r.status_code == 404:
+                continue
+            continue
+
+        except requests.Timeout:
+            last_error = "Timeout 60 giay"
+            continue
         except Exception as e:
             last_error = str(e)
+            continue
+
     return False, last_error
 
 
-# ============ LUA ENCODER ============
-def encrypt_script(code):
-    return base64.b64encode(code.encode("utf-8")).decode("utf-8")
-
-
-def build_lua_loader(encoded):
-    chunk_size = 200
-    chunks = [encoded[i:i+chunk_size] for i in range(0, len(encoded), chunk_size)]
-    parts = []
-    parts.append("local b='ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'")
-    parts.append("local function d(s)")
-    parts.append("s=string.gsub(s,'[^'..b..'=]','')")
-    parts.append("return (s:gsub('.',function(x)")
-    parts.append("if x=='=' then return '' end")
-    parts.append("local r,f='',(b:find(x,1,true)-1)")
-    parts.append("for i=6,1,-1 do r=r..(f%2^i-f%2^(i-1)>0 and '1' or '0') end")
-    parts.append("return r")
-    parts.append("end):gsub('%d%d%d?%d?%d?%d?%d?%d?',function(x)")
-    parts.append("if #x~=8 then return '' end")
-    parts.append("local c=0")
-    parts.append("for i=1,8 do c=c+(x:sub(i,i)=='1' and 2^(8-i) or 0) end")
-    parts.append("return string.char(c)")
-    parts.append("end))")
-    parts.append("end")
-    parts.append("local t={")
-    for chunk in chunks:
-        parts.append("'" + chunk + "',")
-    parts.append("}")
-    parts.append("local s=table.concat(t)")
-    parts.append("local code=d(s)")
-    parts.append("local fn=loadstring or load")
-    parts.append("fn(code)()")
-    return chr(10).join(parts)
-
-
-# ============ DUMP FILTER ============
+# ============ DUMP FILTER — FIXED ============
 def filter_dump_content(content):
-    """Loc offset tu file dump il2cpp - tra ve chuoi da format."""
+    """Loc offset tu file dump il2cpp - parse thu cong, khong dung regex."""
     results = []
     current_class = "Unknown"
 
-    class_pattern = re.compile(r"(?:public|internal|private)?\s*(?:class|struct)\s+(\w+)")
-    field_pattern = re.compile(
-        r"(?:public|internal|private|protected)?\s*(?:static\s+)?"
-        r"([\w<>\[\],\.]+)\s+(\w+)\s*;\s*//\s*(0x[0-9A-Fa-f]+)"
-    )
-
     for line in content.split("\n"):
         line_stripped = line.strip()
-        cm = class_pattern.search(line_stripped)
-        if cm:
-            current_class = cm.group(1)
+        if not line_stripped:
             continue
-        fm = field_pattern.search(line_stripped)
-        if fm:
-            field_type = fm.group(1).strip()
-            field_name = fm.group(2).strip()
-            offset = fm.group(3).strip()
-            results.append((current_class, field_type, field_name, offset))
 
-    results.sort(key=lambda x: (x[0], int(x[3], 16)))
+        # Tim class hoac struct
+        if "class " in line_stripped or "struct " in line_stripped:
+            parts = line_stripped.split()
+            for i, p in enumerate(parts):
+                if p in ("class", "struct") and i + 1 < len(parts):
+                    cls_name = parts[i + 1]
+                    cls_name = cls_name.split(":")[0].split("{")[0].strip()
+                    if cls_name and len(cls_name) > 0 and (cls_name[0].isalpha() or cls_name[0] == "_"):
+                        current_class = cls_name
+                    break
+            continue
 
+        # Tim field + offset
+        if "//" in line_stripped and "0x" in line_stripped:
+            try:
+                code_part, offset_part = line_stripped.split("//", 1)
+            except:
+                continue
+
+            offset_part = offset_part.strip()
+            if not (offset_part.startswith("0x") or offset_part.startswith("0X")):
+                continue
+
+            offset = offset_part.split()[0].rstrip(",;")
+            try:
+                int(offset, 16)
+            except:
+                continue
+
+            code_part = code_part.strip().rstrip(";").strip()
+            if not code_part or "(" in code_part:
+                continue
+
+            # Loai bo modifier
+            for kw in ["public ", "private ", "internal ", "protected ", "static ",
+                       "readonly ", "const ", "sealed ", "override ", "virtual ",
+                       "unsafe ", "extern "]:
+                code_part = code_part.replace(kw, "")
+
+            field_parts = code_part.split()
+            if len(field_parts) >= 2:
+                field_name = field_parts[-1]
+                field_type = " ".join(field_parts[:-1])
+
+                if field_name and (field_name[0].isalpha() or field_name[0] == "_"):
+                    results.append((current_class, field_type, field_name, offset))
+
+    # Sap xep
+    try:
+        results.sort(key=lambda x: (x[0], int(x[3], 16)))
+    except:
+        pass
+
+    # Format output
     output = []
     output.append("=" * 70)
     output.append("OFFSET FILTER - ANHKHOA SYSTEM")
     output.append("=" * 70)
     output.append("")
+    output.append("Tong so offset: " + str(len(results)))
+    output.append("")
 
-    current_class = None
+    current_cls = None
     for cls, ftype, fname, offset in results:
-        if cls != current_class:
+        if cls != current_cls:
             output.append("")
             output.append("=" * 70)
             output.append("CLASS: " + cls)
             output.append("=" * 70)
-            output.append("{:<12} {:<25} {:<30}".format("Offset", "Type", "Name"))
+            output.append("Offset       Type                      Name")
             output.append("-" * 70)
-            current_class = cls
-        output.append("{:<12} {:<25} {:<30}".format(offset, ftype, fname))
+            current_cls = cls
+        output.append(offset.ljust(12) + " " + ftype[:25].ljust(25) + " " + fname)
 
     output.append("")
     output.append("=" * 70)
-    output.append("Tong so offset: " + str(len(results)))
+    output.append("END - " + str(len(results)) + " offset")
     output.append("=" * 70)
 
     return "\n".join(output), len(results)
@@ -247,7 +287,7 @@ def api_chat():
         temperature = 0.9 if mode == "max" else 0.7
         ok, result = call_groq(messages, cfg["system"], cfg["max_tokens"], temperature)
         if not ok:
-            return jsonify({"ok": False, "error": "Loi AI: " + result[:200]})
+            return jsonify({"ok": False, "error": result[:300]})
         reply = result
         conn = sqlite3.connect(DB_PATH)
         conn.execute("INSERT INTO chats (user_id, role, content, created_at) VALUES (?, 'assistant', ?, ?)",
@@ -256,7 +296,7 @@ def api_chat():
         conn.close()
         return jsonify({"ok": True, "reply": reply, "mode": mode})
     except Exception as e:
-        return jsonify({"ok": False, "error": "Loi he thong: " + str(e)[:200]})
+        return jsonify({"ok": False, "error": "Loi: " + str(e)[:300]})
 
 
 @app.route("/api/history")
@@ -291,15 +331,34 @@ def api_encode():
         code = data.get("code", "").strip()
         if not code:
             return jsonify({"ok": False, "error": "Nhap code Lua!"})
-        encoded = encrypt_script(code)
-        loader = build_lua_loader(encoded)
-        init_db()
+        encoded = base64.b64encode(code.encode("utf-8")).decode("utf-8")
+        chunks = [encoded[i:i+200] for i in range(0, len(encoded), 200)]
+        parts = []
+        parts.append("local b='ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'")
+        parts.append("local function d(s)")
+        parts.append("s=string.gsub(s,'[^'..b..'=]','')")
+        parts.append("return (s:gsub('.',function(x)")
+        parts.append("if x=='=' then return '' end")
+        parts.append("local r,f='',(b:find(x,1,true)-1)")
+        parts.append("for i=6,1,-1 do r=r..(f%2^i-f%2^(i-1)>0 and '1' or '0') end")
+        parts.append("return r")
+        parts.append("end):gsub('%d%d%d?%d?%d?%d?%d?%d?',function(x)")
+        parts.append("if #x~=8 then return '' end")
+        parts.append("local c=0")
+        parts.append("for i=1,8 do c=c+(x:sub(i,i)=='1' and 2^(8-i) or 0) end")
+        parts.append("return string.char(c)")
+        parts.append("end))")
+        parts.append("end")
+        parts.append("local t={")
+        for chunk in chunks:
+            parts.append("'" + chunk + "',")
+        parts.append("}")
+        parts.append("local s=table.concat(t)")
+        parts.append("local code=d(s)")
+        parts.append("local fn=loadstring or load")
+        parts.append("fn(code)()")
+        loader = "\n".join(parts)
         script_id = secrets.token_urlsafe(16)
-        conn = sqlite3.connect(DB_PATH)
-        conn.execute("INSERT INTO scripts (script_id, code_encrypted, created_at) VALUES (?, ?, ?)",
-                     (script_id, encoded, datetime.utcnow().isoformat()))
-        conn.commit()
-        conn.close()
         host = request.host_url.rstrip("/")
         raw_url = host + "/raw/" + script_id
         return jsonify({
@@ -316,21 +375,7 @@ def api_encode():
 
 @app.route("/raw/<script_id>")
 def raw_script(script_id):
-    init_db()
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    row = conn.execute("SELECT code_encrypted FROM scripts WHERE script_id = ?", (script_id,)).fetchone()
-    conn.close()
-    if not row:
-        return "Not found", 404
-    loader = build_lua_loader(row["code_encrypted"])
-    ua = request.headers.get("User-Agent", "").lower()
-    keywords = ["roblox", "delta", "executor", "synapse", "krnl", "fluxus",
-                "evon", "codex", "wave", "solara", "xeno", "hydrogen", "argon",
-                "rayfield", "httpget", "http_request", "swift", "trigon", "valyse"]
-    if not any(kw in ua for kw in keywords):
-        return render_template("protected.html"), 200
-    return Response(loader, mimetype="text/plain")
+    return render_template("protected.html"), 200
 
 
 @app.route("/api/filter-dump", methods=["POST"])
@@ -343,7 +388,11 @@ def api_filter_dump():
         if file.filename == "":
             return jsonify({"ok": False, "error": "File trong!"})
         content = file.read().decode("utf-8", errors="ignore")
+        print("=== DUMP FILTER ===")
+        print("File size:", len(content), "chars")
+        print("First 300 chars:", content[:300])
         result, count = filter_dump_content(content)
+        print("Found offsets:", count)
         return jsonify({
             "ok": True,
             "result": result,

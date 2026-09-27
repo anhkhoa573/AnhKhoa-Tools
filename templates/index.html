@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>ANHKHOA Tools</title>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#08080c;--bg2:#12121a;--border:rgba(255,255,255,.07);--text:#eaeaf2;--muted:#6b6b85;--cyan:#00b4ff;--purple:#8c50ff;--green:#22c55e;--red:#ef4444}
+html,body{height:100%;font-family:'Plus Jakarta Sans',sans-serif;background:var(--bg);color:var(--text)}
+body{display:flex;flex-direction:column;min-height:100dvh;overflow-x:hidden}
+
+.topbar{background:rgba(18,18,26,.9);backdrop-filter:blur(20px);border-bottom:1px solid var(--border);padding:12px 18px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100}
+.brand{display:flex;align-items:center;gap:10px}
+.mark{width:34px;height:34px;border-radius:10px;background:linear-gradient(135deg,var(--cyan),var(--purple));display:flex;align-items:center;justify-content:center;font-size:1rem}
+.name{font-size:1rem;font-weight:800;background:linear-gradient(135deg,var(--cyan),var(--purple));-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.user{display:flex;align-items:center;gap:10px;font-size:.82rem;color:var(--muted)}
+.user b{color:var(--cyan)}
+.out{padding:6px 12px;background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.2);color:#f87171;border-radius:8px;font-family:inherit;font-weight:600;font-size:.72rem;cursor:pointer;text-decoration:none}
+
+.tabs{background:rgba(18,18,26,.6);backdrop-filter:blur(20px);border-bottom:1px solid var(--border);padding:8px 18px;display:flex;gap:6px;justify-content:center;flex-wrap:wrap;position:sticky;top:58px;z-index:99}
+.tab{padding:8px 16px;border-radius:9px;background:rgba(0,0,0,.3);border:1px solid var(--border);color:var(--muted);font-family:inherit;font-weight:600;font-size:.78rem;cursor:pointer;transition:all .2s}
+.tab:hover{border-color:rgba(0,180,255,.4);color:var(--text)}
+.tab.active{background:linear-gradient(135deg,var(--cyan),var(--purple));color:#fff;border-color:transparent;box-shadow:0 4px 15px rgba(0,180,255,.2)}
+
+.content{flex:1;padding:20px;max-width:1000px;margin:0 auto;width:100%}
+.panel{display:none;animation:fade .3s ease}
+.panel.active{display:block}
+@keyframes fade{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+
+.box{background:var(--bg2);border:1px solid var(--border);border-radius:14px;padding:20px;margin-bottom:16px}
+.box h3{color:var(--cyan);font-size:.85rem;margin-bottom:12px;text-transform:uppercase;font-weight:700;letter-spacing:.5px}
+textarea{width:100%;height:200px;background:#08080d;border:1px solid var(--border);border-radius:10px;padding:14px;color:var(--text);font-family:Consolas,monospace;font-size:13px;resize:vertical;outline:none;line-height:1.5}
+textarea:focus{border-color:var(--cyan)}
+input[type=text],input[type=password]{width:100%;padding:12px 14px;background:rgba(0,0,0,.35);border:1px solid var(--border);border-radius:10px;color:var(--text);font-family:inherit;font-size:16px;outline:none}
+input:focus{border-color:var(--cyan)}
+.btn{padding:12px 20px;border:none;border-radius:10px;font-family:inherit;font-size:.88rem;font-weight:700;cursor:pointer;transition:all .2s;display:inline-flex;align-items:center;gap:6px}
+.btn-primary{background:linear-gradient(135deg,var(--cyan),var(--purple));color:#fff;box-shadow:0 6px 18px rgba(0,180,255,.25)}
+.btn-primary:hover:not(:disabled){transform:translateY(-1px);box-shadow:0 10px 25px rgba(0,180,255,.4)}
+.btn:disabled{opacity:.6;cursor:not-allowed}
+.btn-secondary{background:rgba(0,0,0,.3);color:var(--text);border:1px solid var(--border)}
+.btn-secondary:hover{background:rgba(0,180,255,.08);border-color:rgba(0,180,255,.4)}
+.btn-danger{background:rgba(239,68,68,.1);color:#f87171;border:1px solid rgba(239,68,68,.2)}
+.btn-success{background:linear-gradient(135deg,var(--green),#16a34a);color:#fff}
+.btn-row{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+.file-input{position:relative;overflow:hidden;display:inline-block}
+.file-input input{position:absolute;inset:0;opacity:0;cursor:pointer}
+
+.result{background:#08080d;border:1px solid var(--border);border-radius:10px;padding:14px;font-family:Consolas,monospace;font-size:12px;color:#4ade80;max-height:400px;overflow-y:auto;white-space:pre-wrap;margin-top:12px;display:none;line-height:1.5}
+.result.show{display:block}
+
+/* Chat */
+.chat{height:400px;overflow-y:auto;padding:14px;background:#08080d;border:1px solid var(--border);border-radius:10px;display:flex;flex-direction:column;gap:10px;margin-bottom:12px}
+.msg{max-width:85%;padding:10px 14px;border-radius:14px;line-height:1.6;font-size:.9rem;word-wrap:break-word;white-space:pre-wrap}
+.msg.user{align-self:flex-end;background:linear-gradient(135deg,var(--cyan),var(--purple));color:#fff;border-bottom-right-radius:4px}
+.msg.ai{align-self:flex-start;background:var(--bg2);border:1px solid var(--border);border-bottom-left-radius:4px}
+.typing span{display:inline-block;width:6px;height:6px;background:var(--cyan);border-radius:50%;margin:0 2px;animation:tb 1.4s infinite}
+.typing span:nth-child(2){animation-delay:.2s;background:var(--purple)}
+.typing span:nth-child(3){animation-delay:.4s}
+@keyframes tb{0%,60%,100%{transform:translateY(0);opacity:.4}30%{transform:translateY(-6px);opacity:1}}
+.chat-input{display:flex;gap:8px}
+.chat-input input{flex:1}
+
+.status{padding:10px 14px;border-radius:10px;font-size:.82rem;margin-top:12px;display:none}
+.status.ok{background:rgba(34,197,94,.1);color:#4ade80;border:1px solid rgba(34,197,94,.25);display:block}
+.status.err{background:rgba(239,68,68,.1);color:#f87171;border:1px solid rgba(239,68,68,.25);display:block}
+
+@media(max-width:600px){
+    .content{padding:14px}
+    .box{padding:16px}
+    textarea{height:160px}
+    .chat{height:300px}
+}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+<div class="brand">
+<div class="mark">&#128295;</div>
+<div class="name">ANHKHOA TOOLS</div>
+</div>
+<div class="user">
+<div>Chao, <b>{{ username }}</b></div>
+<a href="/logout" class="out">Dang xuat</a>
+</div>
+</div>
+
+<div class="tabs">
+<button class="tab active" data-tab="encode" onclick="showTab('encode')">&#128274; Encode Lua</button>
+<button class="tab" data-tab="chat" onclick="showTab('chat')">&#129302; AI Chat</button>
+<button class="tab" data-tab="dump" onclick="showTab('dump')">&#128193; Dump Filter</button>
+</div>
+
+<div class="content">
+
+<!-- ENCODE -->
+<div class="panel active" id="panel-encode">
+<div class="box">
+<h3>&#128229; Code Lua goc</h3>
+<textarea id="inputCode" placeholder="Dan code Lua vao day..."></textarea>
+</div>
+<div class="btn-row">
+<div class="file-input">
+<button class="btn btn-secondary">&#128193; Chon file</button>
+<input type="file" id="fileInput" accept=".lua,.txt" onchange="loadFile(event)">
+</div>
+<button class="btn btn-primary" id="btnEncode" onclick="encode()">&#9889; Encode</button>
+<button class="btn btn-danger" onclick="clearAll()">&#129529; Xoa het</button>
+</div>
+<div class="box" id="resultBox" style="display:none">
+<h3>&#128279; Ket qua</h3>
+<div class="result show" id="encodeResult"></div>
+<div class="btn-row" style="margin-top:12px">
+<button class="btn btn-success" onclick="copyLoadstring()">&#128203; Copy Loadstring</button>
+<button class="btn btn-secondary" onclick="copyRaw()">&#128203; Copy Raw</button>
+<button class="btn btn-secondary" onclick="copyUrl()">&#128203; Copy Link Raw</button>
+</div>
+</div>
+</div>
+
+<!-- CHAT -->
+<div class="panel" id="panel-chat">
+<div class="box">
+<h3>&#129302; AI Chat</h3>
+<div class="chat" id="chatBox">
+<div class="msg ai">Chao ban! Toi la AI. Hoi gi cung duoc nhe.</div>
+</div>
+<div class="chat-input">
+<input type="text" id="chatInput" placeholder="Nhap tin nhan..." onkeydown="if(event.key==='Enter')sendChat()">
+<button class="btn btn-primary" id="btnSend" onclick="sendChat()">&#10148;</button>
+</div>
+<div class="btn-row" style="margin-top:12px">
+<button class="btn btn-secondary" onclick="clearChat()">&#129529; Xoa chat</button>
+</div>
+</div>
+</div>
+
+<!-- DUMP -->
+<div class="panel" id="panel-dump">
+<div class="box">
+<h3>&#128193; Loc Offset tu Dump</h3>
+<p style="color:var(--muted);font-size:.85rem;margin-bottom:14px">Chon file dump tu Il2CppDumper (dump.txt hoac dump.cs) de loc offset.</p>
+<label class="file-input" style="display:block;width:100%">
+<input type="file" id="dumpFile" accept=".txt,.cs" onchange="handleDumpFile(event)">
+<div style="padding:40px;border:2px dashed var(--border);border-radius:12px;text-align:center;cursor:pointer;transition:all .3s">
+<div style="font-size:3rem;margin-bottom:10px">&#128196;</div>
+<div style="font-size:1rem;color:#aaa">Chon file dump</div>
+<div style="font-size:.8rem;color:#666;margin-top:5px">Ho tro dump.txt / dump.cs</div>
+</div>
+</label>
+<button class="btn btn-primary" id="btnFilter" onclick="filterDump()" disabled style="width:100%;margin-top:14px;justify-content:center">&#128269; Loc Offset</button>
+<div class="status" id="dumpStatus"></div>
+<div class="result" id="dumpResult" style="max-height:500px"></div>
+<div class="btn-row" style="margin-top:12px" id="dumpActions" style="display:none">
+<button class="btn btn-success" onclick="downloadDump()">&#128229; Tai xuong Offset&anhkhoa.txt</button>
+</div>
+</div>
+</div>
+
+</div>
+
+<script>
+var currentLoadstring = "";
+var currentRaw = "";
+var currentUrl = "";
+var dumpResult = "";
+var sending = false;
+
+function showTab(name){
+    document.querySelectorAll(".tab").forEach(function(t){
+        t.classList.toggle("active", t.dataset.tab === name);
+    });
+    document.querySelectorAll(".panel").forEach(function(p){
+        p.classList.toggle("active", p.id === "panel-" + name);
+    });
+}
+
+// ============ ENCODE ============
+function loadFile(e){
+    var f = e.target.files[0];
+    if(!f) return;
+    var r = new FileReader();
+    r.onload = function(ev){
+        document.getElementById("inputCode").value = ev.target.result;
+    };
+    r.readAsText(f);
+}
+
+async function encode(){
+    var code = document.getElementById("inputCode").value.trim();
+    if(!code){ alert("Nhap code Lua!"); return; }
+    var btn = document.getElementById("btnEncode");
+    btn.disabled = true;
+    btn.textContent = "Dang ma hoa...";
+    try{
+        var res = await fetch("/api/encode", {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},
+            credentials: "same-origin",
+            body: JSON.stringify({code: code})
+        });
+        var data = await res.json();
+        if(data.ok){
+            currentLoadstring = data.loadstring_url;
+            currentRaw = data.loader;
+            currentUrl = data.raw_url;
+            document.getElementById("encodeResult").textContent =
+                "RAW LINK:\n" + data.raw_url + "\n\nLOADSTRING:\n" + data.loadstring_url;
+            document.getElementById("resultBox").style.display = "block";
+        } else {
+            alert("Loi: " + data.error);
+        }
+    } catch(e){
+        alert("Loi: " + e.message);
+    } finally {
+        btn.disabled = false;
+        btn.textContent = "Encode";
+    }
+}
+
+function copyLoadstring(){
+    if(!currentLoadstring) return;
+    navigator.clipboard.writeText(currentLoadstring);
+    alert("Da copy loadstring!");
+}
+
+function copyRaw(){
+    if(!currentRaw) return;
+    navigator.clipboard.writeText(currentRaw);
+    alert("Da copy raw!");
+}
+
+function copyUrl(){
+    if(!currentUrl) return;
+    navigator.clipboard.writeText(currentUrl);
+    alert("Da copy link raw!");
+}
+
+function clearAll(){
+    document.getElementById("inputCode").value = "";
+    document.getElementById("resultBox").style.display = "none";
+}
+
+// ============ CHAT ============
+async function sendChat(){
+    if(sending) return;
+    var input = document.getElementById("chatInput");
+    var msg = input.value.trim();
+    if(!msg) return;
+    sending = true;
+    var btn = document.getElementById("btnSend");
+    btn.disabled = true;
+
+    var chat = document.getElementById("chatBox");
+    var userDiv = document.createElement("div");
+    userDiv.className = "msg user";
+    userDiv.textContent = msg;
+    chat.appendChild(userDiv);
+    input.value = "";
+
+    var typing = document.createElement("div");
+    typing.className = "msg ai";
+    typing.innerHTML = '<div class="typing"><span></span><span></span><span></span></div>';
+    chat.appendChild(typing);
+    chat.scrollTop = chat.scrollHeight;
+
+    try{
+        var res = await fetch("/api/chat", {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},
+            credentials: "same-origin",
+            body: JSON.stringify({message: msg, mode: "pro"})
+        });
+        var data = await res.json();
+        typing.remove();
+        var aiDiv = document.createElement("div");
+        aiDiv.className = "msg ai";
+        aiDiv.textContent = data.ok ? data.reply : "Loi: " + data.error;
+        chat.appendChild(aiDiv);
+        chat.scrollTop = chat.scrollHeight;
+    } catch(e){
+        typing.remove();
+        var errDiv = document.createElement("div");
+        errDiv.className = "msg ai";
+        errDiv.textContent = "Loi: " + e.message;
+        chat.appendChild(errDiv);
+    } finally {
+        sending = false;
+        btn.disabled = false;
+        input.focus();
+    }
+}
+
+async function clearChat(){
+    if(!confirm("Xoa toan bo chat?")) return;
+    await fetch("/api/clear", {method: "POST", credentials: "same-origin"});
+    document.getElementById("chatBox").innerHTML = '<div class="msg ai">Da xoa. Bat dau cuoc tro chuyen moi.</div>';
+}
+
+// ============ DUMP FILTER ============
+function handleDumpFile(e){
+    var f = e.target.files[0];
+    if(f){
+        document.getElementById("btnFilter").disabled = false;
+        var st = document.getElementById("dumpStatus");
+        st.className = "status ok";
+        st.textContent = "Da chon: " + f.name + " (" + (f.size/1024).toFixed(2) + " KB)";
+    }
+}
+
+async function filterDump(){
+    var f = document.getElementById("dumpFile").files[0];
+    if(!f){ alert("Chon file!"); return; }
+    var btn = document.getElementById("btnFilter");
+    var st = document.getElementById("dumpStatus");
+    btn.disabled = true;
+    btn.textContent = "Dang loc...";
+
+    var formData = new FormData();
+    formData.append("file", f);
+
+    try{
+        var res = await fetch("/api/filter-dump", {
+            method: "POST",
+            body: formData,
+            credentials: "same-origin"
+        });
+        var data = await res.json();
+        if(data.ok){
+            dumpResult = data.result;
+            document.getElementById("dumpResult").textContent = data.result;
+            document.getElementById("dumpResult").classList.add("show");
+            document.getElementById("dumpActions").style.display = "flex";
+            st.className = "status ok";
+            st.textContent = "Loc thanh cong: " + data.count + " offset";
+        } else {
+            st.className = "status err";
+            st.textContent = "Loi: " + data.error;
+        }
+    } catch(e){
+        st.className = "status err";
+        st.textContent = "Loi: " + e.message;
+    } finally {
+        btn.disabled = false;
+        btn.textContent = "Loc Offset";
+    }
+}
+
+function downloadDump(){
+    if(!dumpResult) return;
+    var blob = new Blob([dumpResult], {type: "text/plain"});
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement("a");
+    a.href = url;
+    a.download = "Offset&anhkhoa.txt";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+}
+</script>
+</body>
+</html>
